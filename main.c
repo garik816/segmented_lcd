@@ -10,6 +10,7 @@
 // The PD-332 has identical LCD wiring for each of 3 digits; 2
 //segment pins per digit, labeled A and B
 #include <avr/io.h>
+#include <avr/interrupt.h>
 unsigned char segs_out = 0;
 unsigned char state_counter = 8;
 unsigned char output_change = 0;
@@ -25,7 +26,7 @@ void initialization(void);
 const unsigned char segment_table[] = {0x77,0x22,0xDB,0x97,0x2E,0x6D,0x7C,0x23,0xFF,0x2F}; //displaynumbers 0-9
 //************************Timer 0 overflow interrupt serviceroutine***********************
 
-ISR(timer0_ovf_isr)
+ISR(TIMER0_OVF_vect)
 {
 	// Re-load Timer 0 value
 	TCNT0=5; //Timer0 period = 0.125 usec = 8MHZ/64. 2msec = 8usec*250 5 = 255-250 5/4/05
@@ -35,7 +36,7 @@ ISR(timer0_ovf_isr)
 }
 //*********************End of Interrupt ServiceRoutine*************************************
 //**********************Main Beginshere****************************************************
-void main(void) {
+int main(void) {
 //* * * * * Call Initialization function * * * * * *see functiondefined below* * * * * * *
 initialization();
 //* * * * * * * Eanble Global enable interrupts* * * * * * * * ** *
