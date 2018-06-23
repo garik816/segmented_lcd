@@ -1,6 +1,16 @@
+//TODO:
+//	setup button to change the mode
+//
+//
+
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+
+#define Bit_is_set(val, bit)   ((val & (1<<(bit)))!=0)
+#define Bit_is_clear(val, bit)   ((val & (1<<(bit)))==0)
+#define Bit_set(val, bit)   (val) |= ((1<<(bit)))
+#define Bit_reset(val, bit)   (val) &= (~(1<<(bit)))
 
 unsigned char segs_out = 0;
 unsigned char state_counter = 8;
@@ -10,6 +20,10 @@ unsigned char LCD_d_2 = 0;
 unsigned char LCD_d_3 = 0;
 unsigned char LCD_d_4 = 0;
 unsigned char Pt_1_sec = 0; // 0.1 second counter
+
+unsigned int mode = 0;
+unsigned int nullFlag = 0;
+unsigned int buttonPressed = 0;
 
 
 
@@ -63,6 +77,15 @@ ISR(TIMER0_OVF_vect)
 	// Re-load Timer 0 value
 	TCNT0=5; //Timer0 period = 0.125 usec = 8MHZ/64. 2msec = 8usec*250 5 = 255-250 5/4/05
 	state_counter++;
+
+	if (Bit_is_clear(PINB,PB1)){
+		while (Bit_is_clear(PINB,PB1)){
+			nullFlag=1;
+			Bit_set(PORTB, PB0);
+		};
+		buttonPressed = 1;
+	}
+
 	output_change = 1; // This is a flag for main loop
 	if (state_counter > 7) state_counter = 0;
 	}
@@ -71,7 +94,7 @@ void lcdOut(){
 	// The following state_counter generates the 4 COM output waveforms via PORTD, each with HI and LOW outputs
 	switch (state_counter) {
 		case 0: {
-			segs_out = (segment_table[LCD_d_1]& 0x03); 					//getdigit_1's A & B bits
+			segs_out = (segment_table[LCD_d_1]& 0x03); 					//get digit_1's A & B bits
 			segs_out = segs_out | ((segment_table[LCD_d_2]&0x03)*4); 	//get digit_10's A & B bits
 			segs_out = segs_out | ((segment_table[LCD_d_3]&0x03)*16); 	//get digit_100's A & B bits
 			segs_out = segs_out | ((segment_table[LCD_d_4]&0x03)*64); 	//get digit_1000's A & B bits
@@ -155,21 +178,20 @@ void lcdOut(){
 
 void timer(){
 	// Increment a counter to measure out 0.1 sec
-	Pt_1_sec++;
-	if (Pt_1_sec >=50){//.1 sec
+		Pt_1_sec++;
+		if (Pt_1_sec >=50){//.1 sec
 		Pt_1_sec = 0;
 		LCD_d_1++; // 3 1/2 digit ripple BCD counter for LCD digits
 			if (LCD_d_1 >=10){
 				LCD_d_1 = 0;
 				LCD_d_2++;}
-					if (LCD_d_2 >=10){
-						LCD_d_2 = 0;
-						LCD_d_3++;}
-							if (LCD_d_3 >=10){
-								LCD_d_3 = 0;
-								LCD_d_4++;
-							}
-					}// end .1 sec
+			if (LCD_d_2 >=10){
+				LCD_d_2 = 0;
+				LCD_d_3++;}
+			if (LCD_d_3 >=10){
+				LCD_d_3 = 0;
+				LCD_d_4++;}
+		}// end .1 sec
 }
 
 void adcToLCD(){
@@ -184,9 +206,40 @@ void adcToLCD(){
 	LCD_d_4 = i%10;
 }
 
+void setToZero(){
+	if (nullFlag==1){
+		nullFlag=0;
+		segs_out = 0;
+		LCD_d_1 = 0;
+		LCD_d_2 = 0;
+		LCD_d_3 = 0;
+		LCD_d_4 = 0;
+	}
+	else nullFlag = 0;
+}
+
+void modeSelect(){
+	if (buttonPressed == 1){
+		buttonPressed = 0;
+		mode++;
+	}
+	switch (mode%2) {
+		case 0: {
+			timer();
+		}
+		break;
+		case 1: {
+			adcToLCD();
+		}
+		break;
+	}
+}
+
 int main(void) {
 
 	initialization();
+	Bit_set(DDRB, PB0);
+	Bit_set(PORTB, PB1);
 	sei();
 
 	while (1)
@@ -194,9 +247,10 @@ int main(void) {
 		_delay_us(500);
 		if(output_change){
 				output_change = 0;
+				modeSelect();
+				setToZero();
 				lcdOut();
-				//timer();
-				adcToLCD();
+
 
 			}
 
